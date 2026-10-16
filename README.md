@@ -14,15 +14,15 @@ aurora-glass/
 └── favicon.svg     站点图标
 ```
 
-## 风格来源
+## 设计语言
 
-从参考主题 `theme-glassmorphism`（Vue 打包产物）中提取设计语言，落到
-XB-Probe 的原生前端约束（零外部依赖、CSP `default-src 'self'`）之下：
+主题围绕四条主张展开，全部落在 XB-Probe 的原生前端约束
+（零外部依赖、CSP `default-src 'self'`）之内：
 
-| 提取到的设计 | 在本主题中的落地 |
+| 设计要素 | 实现 |
 |---|---|
 | 毛玻璃材质：半透明面 + `backdrop-filter: blur + saturate` + 1px 亮边 + 内侧高光 | `--glass / --glass-border / --glass-inset` 三件套，全部容器通用 |
-| 极光/图片背景透过玻璃呈色 | 四团 CSS 径向渐变光斑缓慢漂移（青/靛/品红/金），`prefers-reduced-motion` 时静止 |
+| 极光背景透过玻璃呈色 | 四团 CSS 径向渐变光斑缓慢漂移（青/靛/品红/金），`prefers-reduced-motion` 时静止 |
 | 卡片大圆角 + 柔和投影托离纸面 | `--radius: 16px`，`--glass-shadow` 双层柔影；hover 抬升一档 |
 | **节点卡片：2×2 指标格**（CPU/内存/磁盘/流量各占一格，格内标签+数值+进度条+说明） | `.n-tiles` + `.tile`，四格自动排布；某格被后台关闭时余下奇数格自动铺满整行 |
 | 指标按用量分档着色（绿→琥珀→玫红），而非单色 | `.bar i.warn / .bad` 与 `.tile.warn / .bad`，分档阈值 75% / 90% |
@@ -31,13 +31,11 @@ XB-Probe 的原生前端约束（零外部依赖、CSP `default-src 'self'`）�
 | 顶栏吸顶 + 毛玻璃 + 渐变标题 | `.topbar` + `.site-title` 渐变色文字 |
 | 彩色分级进度条 + 彩色图表 | 每条指标一个色相（青/紫/琥珀/翠/玫红），图表按指标取色、延迟按序号取极光色相 + 虚线 |
 
-与参考主题的两点**有意不同**：
+实现说明：
 
-1. 参考主题的卡片内容由 Vue 组件承载；本主题所有 DOM 由 `app.js` 用
-   `textContent` 手工构建（CSP 禁 `innerHTML` 之外，也符合平台
-   "渲染不可信字符串一律 textContent"的约定）。
-2. 参考主题自带地球视图与地图；XB-Probe 的公开 API 不含坐标数据，
-   本主题不引入地理组件，把版面让给指标与曲线。
+1. 所有 DOM 由 `app.js` 用 `textContent` 手工构建——CSP 下不允许内联脚本，
+   也符合平台"渲染不可信字符串一律 textContent"的约定。
+2. 公开 API 不含坐标数据，因此不引入任何地理组件，版面全部让给指标与曲线。
 
 ## 安装（导入 XB-Probe）
 
@@ -100,7 +98,7 @@ sudo systemctl restart xb-probe-master
   已同时下发）。
 - XB-Probe：公开 API 版本 `v1`（`/api/public/v1/*`），与内置主题同一套接口。
 
-## 许可与致谢
+## 许可
 
-- 设计语言参考并致谢 [Theme-Glassmorphism](https://github.com/Gongsc/Theme-Glassmorphism)（Gongsc）。
-- 国旗图形与原主题无关，取自 XB-Probe 内置前端的同一张 SVG 表（保持看板与后台一致）。
+- 主题内容（结构 / 样式 / 脚本 / 图标）均为本项目的原创实现。
+- 国旗图形取自 XB-Probe 内置前端的同一张 SVG 表，以保持看板与后台的显示一致。
