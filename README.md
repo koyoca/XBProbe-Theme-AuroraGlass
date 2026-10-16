@@ -39,30 +39,65 @@ aurora-glass/
 
 ## 安装（导入 XB-Probe）
 
-外部主题的加载目录由 Master 的 `themes_dir` 决定，默认
-`<data_dir>/themes`（`master.yaml` 未配置时即 `data_dir/themes`）。
+外部主题的加载目录由 Master 的 `themes_dir` 决定，安装脚本的默认值是
+**`/var/lib/xb-probe-master/themes`**（即 `data_dir/themes`；`data_dir`
+默认 `/var/lib/xb-probe-master`，两者都以实际 `master.yaml` 为准）。
+
+Master 服务以专用低权限用户 **`probe`** 运行（systemd 单元里是
+`User=probe` / `Group=probe`），主题静态文件必须让该用户可读。
 
 ```bash
-# 1) 把整个目录拷到主题目录下（目录名即主题名）
-scp -r aurora-glass root@<master-host>:/var/lib/xb-probe/themes/
+# 方式 A：git clone（推荐——仓库名带前缀，注意落点目录名）
 
-# 或者直接在服务器上解压/克隆
-sudo cp -r aurora-glass /var/lib/xb-probe/themes/
-sudo chown -R xb-probe:xb-probe /var/lib/xb-probe/themes/aurora-glass
-chmod -R a+rX /var/lib/xb-probe/themes/aurora-glass
+# A1：clone 时直接把目标目录写成 aurora-glass（最省事）
+sudo git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git \
+    /var/lib/xb-probe-master/themes/aurora-glass
+
+# A2：或先 clone 再改名（等价做法）
+sudo git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git /tmp/ag
+sudo cp -r /tmp/ag /var/lib/xb-probe-master/themes/aurora-glass
+sudo rm -rf /tmp/ag
+```
+
+> **落点目录名必须是 `aurora-glass`**：主题目录下的**目录名就是主题标识**
+> （`theme.json` 里的 `name` 只是显示名）。直接 `git clone <url>` 而不给目标路径时，
+> 会在当前目录下留成 `XBProbe-Theme-AuroraGlass/`——后台主题列表里就会出现这个
+> 又长又带前缀的标识，与预期的 `aurora-glass` 不符。
+> 已 clone 成别的名字的话，改完名重启 Master 即可（`.git` 目录不影响加载）。
+
+```bash
+# 方式 B：本地打包后上传（不装 git 的机器）
+
+# 在本地：从仓库取一份干净的目录（去掉 .git）
+git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git /tmp/ag
+tar -czf aurora-glass.tar.gz -C /tmp/ag --exclude=.git .
+# 上传并解压（服务器上，落点仍是 aurora-glass）：
+sudo mkdir -p /var/lib/xb-probe-master/themes/aurora-glass
+sudo tar -xzf aurora-glass.tar.gz -C /var/lib/xb-probe-master/themes/aurora-glass
+```
+
+```bash
+# 修正归属与权限（无论用哪种方式装完都做一遍）
+sudo chown -R probe:probe /var/lib/xb-probe-master/themes/aurora-glass
+sudo chmod -R a+rX /var/lib/xb-probe-master/themes/aurora-glass
+
+# 核对：目录名、文件都在、probe 用户真的读得到
+ls -ld /var/lib/xb-probe-master/themes/aurora-glass
+ls /var/lib/xb-probe-master/themes/aurora-glass
+sudo -u probe test -r /var/lib/xb-probe-master/themes/aurora-glass/theme.json \
+  && echo "probe 可读 ✓" || echo "probe 读不到，检查归属/权限"
 ```
 
 注意：
 
-- 主题目录下的**目录名**就是主题标识（这里即 `aurora-glass`），
-  与 `theme.json` 里的 `name`（显示名）是两回事。
-- 静态文件由 Master 直接读取，确保运行用户（`xb-probe`）可读；
-  `theme.json` 与四个文件缺一不可。
-- `themes_dir` 改过位置时以实际值为准（Master 启动时扫描一次，
-  新增主题后重启 Master 或等待热扫描生效）。
+- 必需文件（少一个主题都会被跳过或渲染残缺）：
+  `theme.json`、`index.html`、`style.css`、`app.js`（`favicon.svg` 可选）。
+- `themes_dir` 在部署时被写进配置（`master.yaml` 的 `themes_dir: "/var/lib/xb-probe-master/themes"`）；
+  如果你改过 `--data` 或 `themes_dir`，以那个值为准。
+- Master 启动时扫描一次主题目录，新增主题后需重启（见下）。
 
 ```bash
-# 2) 重启 Master 让主题被扫描到（若版本支持动态扫描可跳过）
+# 重启 Master 让主题被扫描到
 sudo systemctl restart xb-probe-master
 ```
 
