@@ -1,0 +1,57 @@
+name: release-theme
+
+# 打 tag 即发版：tag 约定 <主题名>-v<版本>，例如 aurora-glass-v1.1.0
+# 流程：校验主题目录存在 → 校验 tag 与 theme.json 的 version 一致
+#       → 打包 dist/<主题名>.zip → 创建 Release 并附上 zip
+on:
+  push:
+    tags:
+      - "*-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析 tag
+        id: tag
+        run: |
+          set -eu
+          tag="${GITHUB_REF_NAME}"
+          theme="${tag%-v*}"
+          version="${tag##*-v}"
+          if [ ! -f "$theme/theme.json" ]; then
+            echo "::error::找不到主题目录 $theme（tag 应为 <主题名>-v<版本>）"
+            exit 1
+          fi
+          echo "theme=$theme" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "主题：$theme，tag 版本：$version"
+
+      - name: 校验 tag 与 theme.json 版本一致
+        run: |
+          set -eu
+          v=$(python3 -c "import json;print(json.load(open('${{ steps.tag.outputs.theme }}/theme.json', encoding='utf-8'))['version'])")
+          echo "theme.json version=$v / tag version=${{ steps.tag.outputs.version }}"
+          if [ "$v" != "${{ steps.tag.outputs.version }}" ]; then
+            echo "::error::tag 与 ${{ steps.tag.outputs.theme }}/theme.json 的 version 不一致（$v）"
+            exit 1
+          fi
+
+      - name: 打包主题
+        run: python3 scripts/build-themes.py --only "${{ steps.tag.outputs.theme }}"
+
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          name="${{ steps.tag.outputs.theme }}"
+          ver="${{ steps.tag.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" "dist/${name}.zip" \
+            --title "${name} v${ver}" \
+            --notes "主题包 ${name}.zip —— 安装/更新：XB-Probe 管理后台 → 系统 → 主题 → 上传主题包（zip 文件名即主题名，同名主题整目录替换）。"

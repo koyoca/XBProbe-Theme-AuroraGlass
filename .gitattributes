@@ -1,4 +1,4 @@
-# 主题文件统一 LF：服务器（Linux）读取，且平台约定不引入 CRLF。
+# 文本文件统一 LF：服务器（Linux）读取，且平台约定不引入 CRLF。
 * text=auto eol=lf
 
 # 二进制资源不参与行尾转换
@@ -6,3 +6,4 @@
 *.jpg binary
 *.webp binary
 *.woff2 binary
+*.zip binary
