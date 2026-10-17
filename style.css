@@ -1078,6 +1078,47 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .stat .v { font-size: 16px; font-weight: 700; margin-top: 4px; }
 .stat .sub { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
 
+/* ---- 在线情况时间线 ----
+   每格一个时间桶：在线=主题绿（带微光）、无上报=玫红、未知=轨道灰
+   （"还没部署"不能画成"离线"，否则凭空造出一段故障）。
+   用 flex + 1px 间隔而不是 canvas：格数固定（24h/10min = 144），div 更省事，
+   也能直接吃 title 的悬浮提示。外框沿用玻璃语言。 */
+.online-strip {
+  display: flex;
+  gap: 1px;
+  height: 24px;
+  margin: 2px 0 6px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--glass-soft);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-inset);
+  overflow: hidden;
+}
+.online-strip > i {
+  flex: 1 1 0;
+  min-width: 0;
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--track);
+  opacity: .5;
+}
+.online-strip > i.on {
+  background: var(--online);
+  opacity: 1;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--online) 42%, transparent);
+}
+.online-strip > i.off {
+  background: var(--bad);
+  opacity: .76;
+}
+.online-note { margin: 0 0 4px; }
+@media (max-width: 560px) {
+  /* 窄屏上时间桶可能多到 500+，1px 间隔会把格子挤没，直接贴紧 */
+  .online-strip { gap: 0; }
+}
+
 /* ============================================================ 页脚 */
 .empty-tip {
   text-align: center;

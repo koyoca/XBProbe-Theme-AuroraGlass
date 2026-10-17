@@ -171,6 +171,13 @@
           <div class="legend" id="latency-legend"></div>
         </figure>
 
+        <!-- 在线情况：每格一个时间桶，三态（在线 / 无上报 / 未知）。
+             格长由服务端设置项 online.segment_min 决定，文案跟着 step 变。 -->
+        <div class="section-head"><h3>在线情况</h3><span class="muted" id="online-summary">—</span></div>
+        <div class="online-strip" id="online-strip" role="img" aria-label="在线情况时间线"></div>
+        <p class="muted online-note"><span id="online-step-note">每格 10 分钟</span>。这段历史由"有没有上报"推导，
+          与告警判定同源；悬停可看该时段的状态。</p>
+
         <div class="section-head"><h3>延迟明细</h3></div>
         <div class="grid cards-3" id="latency-list"></div>
       </div>

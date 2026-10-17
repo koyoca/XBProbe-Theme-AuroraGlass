@@ -435,16 +435,41 @@
     return null;
   }
 
+  // avgOfNonNull 求一组（可能含 null）数值的非空平均。
+  // 空段不计入分母：没有数据不等于"丢包 0%"，算进去会把有数据的段稀释掉。
+  function avgOfNonNull(arr) {
+    if (!arr) return null;
+    var sum = 0, n = 0;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] == null) continue;
+      sum += arr[i]; n++;
+    }
+    return n ? sum / n : null;
+  }
+
+  // fmtLoss 把 ×100 的丢包值格式化成百分比。
+  // 小于 0.1% 时多给一位小数：底层粒度本来就是 0.01%，
+  // 统一 toFixed(1) 会把"确实丢过一点"压成 0.0%。
+  function fmtLoss(lossX100) {
+    var p = (lossX100 || 0) / 100;
+    if (p > 0 && p < 0.1) return p.toFixed(2) + '%';
+    return p.toFixed(1) + '%';
+  }
+
   function latRow(b) {
     var row = el('div', 'lb-row');
     var head = el('div', 'lb-head');
     var label = b.name || CARRIER[b.carrier] || b.carrier;
-    var carrier = CARRIER[b.carrier] || '';
+    // 只有真运营组才补后缀：custom 是缺省值（"自定义"），不携带信息，
+    // 拼上去只会得到"节点名称 · 自定义"这种噪声。
+    var carrier = b.carrier === 'custom' ? '' : (CARRIER[b.carrier] || '');
     if (carrier && label.indexOf(carrier) < 0) label += ' · ' + carrier;
     head.appendChild(el('span', 'lb-name', label));
 
     var lastRtt = lastNonNull(b.rtt);
-    var lastLoss = lastNonNull(b.loss);
+    // 丢包取整个窗口的综合值（各段非空平均），不是"最后一个桶"：
+    // 只要最近一段恢复成 0%，标签就永远显示 0.0%，哪怕刚刚整段丢包。
+    var winLoss = avgOfNonNull(b.loss);
     var rt = el('span', 'lb-val');
     if (lastRtt != null) {
       rt.textContent = (lastRtt / 1000).toFixed(0) + ' ms';
@@ -456,9 +481,10 @@
     head.appendChild(rt);
 
     var ls = el('span', 'lb-val lb-loss');
-    if (lastLoss != null) {
-      ls.textContent = (lastLoss / 100).toFixed(1) + '%';
-      ls.style.color = lossColor(lastLoss);
+    if (winLoss != null) {
+      ls.textContent = fmtLoss(winLoss);
+      ls.title = '本窗口综合丢包（各段平均）';
+      ls.style.color = lossColor(winLoss);
     } else {
       ls.textContent = '—';
       ls.className = 'lb-val muted-v';
@@ -489,7 +515,7 @@
         d.title = when + ' · ' + (v / 1000).toFixed(0) + ' ms';
       } else {
         d.style.backgroundColor = lossColor(v);
-        d.title = when + ' · 丢包 ' + (v / 100).toFixed(1) + '%';
+        d.title = when + ' · 丢包 ' + fmtLoss(v);
       }
       line.appendChild(d);
     }
@@ -1150,6 +1176,11 @@
     }
 
     if (detailTab === 'latency') {
+      // 在线情况（近 N 小时）：与延迟曲线一起加载，切换时间范围时同步变化。
+      getJSON('/nodes/' + encodeURIComponent(id) + '/online?range=' + range)
+        .then(function (res) { if (current === id) renderOnlineStrip(res); })
+        .catch(function () { });
+
       getJSON('/nodes/' + encodeURIComponent(id) + '/latency?range=' + range)
         .then(function (list) {
           if (current !== id) return;
@@ -1219,6 +1250,57 @@
     });
   }
 
+  // renderOnlineStrip 画"在线情况"时间线（GET /nodes/{id}/online）。
+  //
+  // 三态：有上报=绿色实心、无上报=玫红、未知（节点当时还不存在/还没数据）
+  // =轨道灰。把"还没部署"和"离线"用同一种颜色画，会凭空造出一段故障。
+  // 格长由服务端设置项 online.segment_min 决定，文案跟着 step 变。
+  function renderOnlineStrip(res) {
+    var box = $('online-strip');
+    var sum = $('online-summary');
+    if (!box) return;
+    box.textContent = '';
+    var segs = (res && res.segments) || [];
+    var note = $('online-step-note');
+    if (!segs.length) {
+      if (sum) sum.textContent = '—';
+      return;
+    }
+    var step = res.step || 600;
+    var from = res.from || 0;
+    if (note) {
+      var mins = Math.round(step / 60);
+      note.textContent = '每格 ' + (mins >= 1 ? mins + ' 分钟' : step + ' 秒');
+    }
+    var offline = 0;
+    segs.forEach(function (v, i) {
+      var d = el('i');
+      if (v === 1) {
+        d.className = 'on';
+      } else if (v === 0) {
+        d.className = 'off';
+        offline++;
+      } else {
+        d.className = 'na';
+      }
+      d.title = fmtHM(from + i * step) + ' · ' +
+        (v === 1 ? '在线' : v === 0 ? '离线（无上报）' : '无数据');
+      box.appendChild(d);
+    });
+    if (sum) {
+      if (offline === 0) {
+        sum.textContent = '窗口内一直在线';
+      } else {
+        var ts = Math.round((res.offline_secs || 0) / 60);
+        sum.textContent = '离线 ' + (res.offline_runs || 0) + ' 次 · 累计 ' +
+          (ts >= 60 ? (ts / 60).toFixed(1) + ' 小时' : ts + ' 分钟') +
+          (res.longest_secs ? ' · 最长一次 ' + Math.max(1, Math.round(res.longest_secs / 60)) + ' 分钟' : '');
+      }
+    }
+  }
+
+  // renderLatencyList 渲染"延迟明细"。数据来自 /latency（按目标 + 时间窗口统计），
+  // 不是节点 DTO 里的 latency 字段——后者只有最后一轮探测的瞬时值。
   function renderLatencyList(items) {
     var box = $('latency-list');
     box.textContent = '';
@@ -1236,18 +1318,38 @@
         dot.style.backgroundColor = latColor(t.avg_rtt);
       }
       k.appendChild(dot);
-      var carrier = CARRIER[t.carrier] || '';
+      var carrier = t.carrier === 'custom' ? '' : (CARRIER[t.carrier] || '');
       var title = t.name || ('目标 #' + t.target_id);
       if (carrier && title.indexOf(carrier) < 0) title += ' · ' + carrier;
       k.appendChild(document.createTextNode(title));
       c.appendChild(k);
 
       c.appendChild(el('div', 'v', t.avg_rtt == null ? '无数据' : (t.avg_rtt / 1000).toFixed(1) + ' ms'));
-      c.appendChild(el('div', 'sub', t.avg_rtt == null
-        ? '窗口内未探通 · 状态 ' + (CARRIER_NAME[t.status] || t.status || '未知')
-        : '最小 ' + (t.min_rtt / 1000).toFixed(1) + ' · 最大 ' + (t.max_rtt / 1000).toFixed(1) +
-          ' ms · 丢包 ' + ((t.loss || 0) / 100).toFixed(1) + '% · ' +
-          (CARRIER_NAME[t.status] || t.status || '未知')));
+
+      // 明细按"这条链路到底怎么样"排列：延迟区间 → 丢包（综合 + 峰值）
+      // → 抖动 → 断点 → 延迟等级。综合丢包是整窗口平均，短时中断会被摊薄，
+      // 所以峰值与断点单列；文案每项都带主语（"延迟等级"不是"丢包"）。
+      var parts = [];
+      if (t.avg_rtt != null) {
+        parts.push('延迟 ' + (t.min_rtt / 1000).toFixed(1) + '~' + (t.max_rtt / 1000).toFixed(1) + ' ms');
+      }
+      var lossTxt = '丢包 ' + fmtLoss(t.loss);
+      if (t.max_loss && t.max_loss > t.loss) {
+        lossTxt += '（最高一段 ' + fmtLoss(t.max_loss) + '）';
+      }
+      parts.push(lossTxt);
+      if (t.jitter) parts.push('抖动 ' + (t.jitter / 1000).toFixed(1) + ' ms');
+      if (t.outages) parts.push('断点 ' + t.outages + ' 段');
+      if (t.avg_rtt == null && t.points && t.points.length === 0) {
+        parts.unshift('窗口内未探通');
+      }
+      var st = CARRIER_NAME[t.status] || t.status || '未知';
+      parts.push(t.avg_rtt == null ? ('状态 ' + st) : ('延迟等级 ' + st));
+
+      var sub = el('div', 'sub', parts.join(' · '));
+      sub.title = '延迟等级按窗口平均 RTT 判定：<50ms 正常、<150ms 偏高、≥150ms 很高；' +
+        '丢包是窗口综合值，括号内是单段（10 分钟）最高值。';
+      c.appendChild(sub);
       box.appendChild(c);
     });
   }

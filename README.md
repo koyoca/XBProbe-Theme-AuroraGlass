@@ -3,7 +3,9 @@
 XB-Probe（小白探针）的**外部公开看板主题**：极光渐变背景 + 毛玻璃卡片。
 
 > 本目录是**独立项目**，不属于 XB-Probe 仓库，也不依赖它的任何构建步骤。
-> 把整个目录拷进 XB-Probe 的 `themes_dir` 即可导入使用。
+> 导入有两条路：打包成 `aurora-glass.zip` 在**后台「系统 → 主题」上传**
+> （1.1.0 起支持，最省事），或把目录拷进 XB-Probe 的 `themes_dir`。
+> 详见下面「安装」一节。
 
 ```
 aurora-glass/
@@ -39,6 +41,32 @@ aurora-glass/
 
 ## 安装（导入 XB-Probe）
 
+三种方式任选：**后台上传主题包**最省事（1.1.0 起支持，无需 SSH）；
+其余两种适合没有后台权限或想直接用 git 管版本的场景。
+
+### 方式 A：后台上传主题包（推荐）
+
+把本目录打包成 **`aurora-glass.zip`**（zip 文件名就是主题名），然后在
+管理后台 → **系统 → 主题** → **上传主题包**：
+
+1. 选择 `aurora-glass.zip`；
+2. 勾选「安装后立即启用」（接口参数 `activate=1`）可直接切换；
+3. 同名主题会被**整目录替换**——这就是"更新同一主题"的方式，
+   不会把上一版多出来的文件留在新版本里。
+
+打包时注意 zip 根目录（或唯一顶层目录）下就是 `theme.json`：
+
+```bash
+# 在主题目录内打包（theme.json 位于 zip 根）
+zip -r ../aurora-glass.zip . -x ".git/*" -x ".gitattributes" -x "*.zip"
+```
+
+上传接口：`POST /api/admin/v1/themes/upload`（multipart/form-data，字段名 `file`），
+上限 32 MB；zip-slip、单文件 16 MB、缺 `theme.json` 都会被服务端拒绝，
+失败时会还原旧主题、线上不受影响。
+
+### 方式 B：git clone / 拷贝到 themes 目录
+
 外部主题的加载目录由 Master 的 `themes_dir` 决定，安装脚本的默认值是
 **`/var/lib/xb-probe-master/themes`**（即 `data_dir/themes`；`data_dir`
 默认 `/var/lib/xb-probe-master`，两者都以实际 `master.yaml` 为准）。
@@ -47,13 +75,11 @@ Master 服务以专用低权限用户 **`probe`** 运行（systemd 单元里是
 `User=probe` / `Group=probe`），主题静态文件必须让该用户可读。
 
 ```bash
-# 方式 A：git clone（推荐——仓库名带前缀，注意落点目录名）
-
-# A1：clone 时直接把目标目录写成 aurora-glass（最省事）
+# B1：clone 时直接把目标目录写成 aurora-glass（最省事）
 sudo git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git \
     /var/lib/xb-probe-master/themes/aurora-glass
 
-# A2：或先 clone 再改名（等价做法）
+# B2：或先 clone 再改名（等价做法）
 sudo git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git /tmp/ag
 sudo cp -r /tmp/ag /var/lib/xb-probe-master/themes/aurora-glass
 sudo rm -rf /tmp/ag
@@ -66,7 +92,7 @@ sudo rm -rf /tmp/ag
 > 已 clone 成别的名字的话，改完名重启 Master 即可（`.git` 目录不影响加载）。
 
 ```bash
-# 方式 B：本地打包后上传（不装 git 的机器）
+# 方式 C：本地打包后上传（不装 git、也没有后台权限的机器）
 
 # 在本地：从仓库取一份干净的目录（去掉 .git）
 git clone https://github.com/koyoca/XBProbe-Theme-AuroraGlass.git /tmp/ag
@@ -77,7 +103,7 @@ sudo tar -xzf aurora-glass.tar.gz -C /var/lib/xb-probe-master/themes/aurora-glas
 ```
 
 ```bash
-# 修正归属与权限（无论用哪种方式装完都做一遍）
+# 修正归属与权限（用 B/C 两种方式装完都做一遍）
 sudo chown -R probe:probe /var/lib/xb-probe-master/themes/aurora-glass
 sudo chmod -R a+rX /var/lib/xb-probe-master/themes/aurora-glass
 
@@ -94,10 +120,11 @@ sudo -u probe test -r /var/lib/xb-probe-master/themes/aurora-glass/theme.json \
   `theme.json`、`index.html`、`style.css`、`app.js`（`favicon.svg` 可选）。
 - `themes_dir` 在部署时被写进配置（`master.yaml` 的 `themes_dir: "/var/lib/xb-probe-master/themes"`）；
   如果你改过 `--data` 或 `themes_dir`，以那个值为准。
-- Master 启动时扫描一次主题目录，新增主题后需重启（见下）。
+- 用 A（上传）方式装的，服务端会自动处理归属，**不需要**手工 chown；
+  只有 B/C 手工拷进去的才需要上面那段。
 
 ```bash
-# 重启 Master 让主题被扫描到
+# 重启 Master 让主题被扫描到（用 A 方式上传的不需要重启）
 sudo systemctl restart xb-probe-master
 ```
 
@@ -115,6 +142,15 @@ sudo systemctl restart xb-probe-master
 
 - **深浅双模**：默认跟随系统（`prefers-color-scheme`）；顶栏按钮手动切换并记住
   （`localStorage['probe.theme']`）；`?theme=dark|light` 查询参数只作用本次加载，便于截图与排障。
+- **在线情况时间线**（详情页 · 探测延迟）：`GET /nodes/{id}/online` 的逐格数据画成
+  一条玻璃时间线——绿色=有上报、玫红=无上报、浅灰=当时还没有数据（"还没部署"
+  不会被误读成"离线"）。格长跟随设置项 `online.segment_min`，标题旁的汇总给出
+  断线次数 / 累计时长 / 最长一次。
+- **延迟明细四项分列**：延迟区间（min~max）、丢包（窗口综合 + 括号内单段峰值）、
+  抖动、断点次数，最后才是延迟等级——每项都带主语，避免把"延迟很高"读成"丢包很高"。
+  丢包小于 0.1% 时显示两位小数（0.04% 不再被压成 0.0%）。
+- **丢包口径与平台一致**：卡片点阵上的丢包是**窗口综合值**（各段非空平均），
+  不是最后一个桶——最近一段恢复成 0% 也不会掩盖刚发生过的丢包。
 - **后台开关全兼容**：`settings.public.cards` 的 `null / [] / [...]` 三态、
   `public.fields` 字段收窄、`public.lat_window` 时间窗（30m/1h/6h/24h）、
   `admin_url` 后台入口跳转，全部按下发值渲染，不写死。
@@ -132,6 +168,8 @@ sudo systemctl restart xb-probe-master
   （Chrome/Edge 76+、Safari 9+ 起基本可用；毛玻璃在 Safari 需 `-webkit-` 前缀，
   已同时下发）。
 - XB-Probe：公开 API 版本 `v1`（`/api/public/v1/*`），与内置主题同一套接口。
+  其中「在线情况」需要提供 `GET /nodes/{id}/online` 的 Master 版本；更早的
+  Master 上该区块保持空（其余功能不受影响，请求失败会被静默跳过）。
 
 ## 许可
 
